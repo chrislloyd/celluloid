@@ -1,20 +1,26 @@
-# Celluloid Usage Guide
+# Celluloid
 
 Celluloid is a tool that allows you to bundle a git repository and application data into a single SQLite database, creating a self-contained application bundle.
 
 ## Installation
 
-1. Save the `celluloid.sh` script and make it executable:
-```bash
-chmod +x celluloid.sh
-sudo cp celluloid.sh /usr/local/bin/celluloid
-```
+1. Build the Celluloid binary using Zig:
 
-2. Save the `git-remote-celluloid.sh` protocol helper and install it:
-```bash
-chmod +x git-remote-celluloid.sh
-sudo cp git-remote-celluloid.sh /usr/local/bin/git-remote-celluloid
-```
+    ```bash
+    zig build
+    ```
+
+2. Copy the binary to your path:
+
+    ```bash
+    sudo cp zig-out/bin/celluloid /usr/local/bin/
+    ```
+
+3. Set up the git remote helper:
+
+    ```bash
+    sudo ln -s /usr/local/bin/celluloid /usr/local/bin/git-remote-celluloid
+    ```
 
 ## Basic Usage
 
@@ -27,6 +33,7 @@ celluloid init myapp.db
 ```
 
 This creates a SQLite database with the necessary schema for:
+
 - Git objects (blobs, trees, commits, tags)
 - Git references (branches, tags, remotes)
 - Process execution tracking
@@ -61,39 +68,66 @@ celluloid run myapp.db "./start.sh"
 ```
 
 The command will:
+
 - Extract the HEAD commit to a temporary directory
 - Set `DATABASE_URL` environment variable to the SQLite database path
 - Execute the command
 - Record the execution in the `process_runs` table
+
+### 5. Checkout Code from the Bundle
+
+Checkout a specific commit from the database:
+
+```bash
+celluloid checkout myapp.db <commit_sha>
+```
+
+This extracts the specified commit to the current directory.
 
 ## Database Schema
 
 ### Git Tables
 
 **git_objects**: Stores git objects (blobs, trees, commits, tags)
-- `sha`: Object SHA-1 hash
-- `type`: Object type
-- `size`: Object size
-- `data`: Object content (compressed)
+
+- `sha`: TEXT PRIMARY KEY - Object SHA hash
+- `type`: TEXT NOT NULL - Object type (blob, tree, commit, tag)
+- `size`: INTEGER NOT NULL - Object size
+- `data`: BLOB NOT NULL - Object content
+- `created_at`: TIMESTAMP - When object was created
 
 **git_refs**: Stores git references
-- `name`: Reference name (e.g., 'HEAD', 'refs/heads/main')
-- `sha`: Commit SHA the ref points to
-- `type`: Reference type (branch, tag, remote)
+
+- `name`: TEXT PRIMARY KEY - Reference name (e.g., 'HEAD', 'refs/heads/main')
+- `sha`: TEXT NOT NULL - Commit SHA the ref points to
+- `type`: TEXT NOT NULL - Reference type (branch, tag, remote)
+- `updated_at`: TIMESTAMP - When reference was updated
 
 ### Application Tables
 
 **process_runs**: Tracks command executions
-- `commit_sha`: The commit the command was run from
-- `command`: The executed command
-- `exit_code`: Command exit code
-- `stdout`/`stderr`: Command output
-- `status`: Execution status (running, completed, failed)
+
+- `id`: INTEGER PRIMARY KEY AUTOINCREMENT
+- `commit_sha`: TEXT NOT NULL - The commit the command was run from
+- `command`: TEXT NOT NULL - The executed command
+- `pid`: INTEGER - Process ID
+- `parent_pid`: INTEGER - Parent process ID
+- `uid`/`gid`: INTEGER - User/group IDs
+- `start_time`/`end_time`: TIMESTAMP - Command execution timestamps
+- `exit_code`: INTEGER - Command exit code
+- `stdout`/`stderr`: TEXT - Command output
+- `environment`: TEXT - Command environment variables
+- `working_directory`: TEXT - Command working directory
+- `status`: TEXT - Execution status (running, completed, failed)
 
 **code_changes**: Tracks code change migrations
-- `from_sha`: Previous commit SHA
-- `to_sha`: New commit SHA
-- `status`: Migration status (pending, applied, failed)
+
+- `id`: INTEGER PRIMARY KEY AUTOINCREMENT
+- `from_sha`: TEXT - Previous commit SHA
+- `to_sha`: TEXT NOT NULL - New commit SHA
+- `change_time`: TIMESTAMP - When change was applied
+- `status`: TEXT - Migration status (pending, applied, failed)
+- `error_message`: TEXT - Error message if migration failed
 
 ## Code Change Migrations
 
@@ -200,9 +234,10 @@ WHERE p.status = 'completed';
 Since the entire application is a single SQLite file, you can:
 
 1. Back it up with tools like Litestream:
-```bash
-litestream replicate myapp.db s3://mybucket/myapp.db
-```
+
+    ```bash
+    litestream replicate myapp.db s3://mybucket/myapp.db
+    ```
 
 2. Distribute it as a single file
 3. Version it alongside your data
@@ -219,9 +254,12 @@ litestream replicate myapp.db s3://mybucket/myapp.db
 ## Future Enhancements
 
 Potential improvements could include:
+
 - Support for large files with Git LFS
 - Better process isolation and sandboxing
 - Performance optimizations for larger repositories
 - Web interface for viewing code and data
 - Integrated backup and replication
 - Support for multiple applications in one database
+- Improved error handling and reporting
+- Cross-platform compatibility (currently requires SQLite and git)

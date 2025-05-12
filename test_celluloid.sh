@@ -18,9 +18,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Build Zig executables if not already built
+echo "Building Zig executables"
+zig build
+
 # Step 1: Initialize the database
 echo "Step 1: Initializing database"
-./celluloid.sh init "$DB_FILE"
+./zig-out/bin/celluloid init "$DB_FILE"
 [ -f "$DB_FILE" ] || { echo "FAIL: Database file was not created"; exit 1; }
 echo "✓ Database initialized successfully"
 
@@ -112,9 +116,9 @@ echo "✓ Test repository created with commit: $COMMIT_SHA"
 echo "Step 3: Setting up Git remote and pushing code"
 
 # Set up the git remote helper
-# Use absolute path to the git-remote-celluloid.sh script
+# Use absolute path to the zig-out/bin/git-remote-celluloid executable
 # Determine if we're running from the source repo or from a test directory
-if [ -f "$(dirname "$0")/git-remote-celluloid.sh" ]; then
+if [ -f "$(dirname "$0")/zig-out/bin/git-remote-celluloid" ]; then
     # Running from the source repo
     SOURCE_DIR=$(cd "$(dirname "$0")" && pwd)
 else
@@ -125,7 +129,7 @@ fi
 echo "Source directory: $SOURCE_DIR"
 
 mkdir -p "$TEST_DIR/bin"
-cp "$SOURCE_DIR/git-remote-celluloid.sh" "$TEST_DIR/bin/git-remote-celluloid" || echo "Failed to copy git-remote-celluloid.sh"
+cp "$SOURCE_DIR/zig-out/bin/git-remote-celluloid" "$TEST_DIR/bin/git-remote-celluloid" || echo "Failed to copy git-remote-celluloid"
 chmod +x "$TEST_DIR/bin/git-remote-celluloid"
 export PATH="$TEST_DIR/bin:$PATH"
 
